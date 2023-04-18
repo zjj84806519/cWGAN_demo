@@ -122,19 +122,19 @@ class Discriminator(nn.Module):
         return self.disc(x)
 
 
-class GaussianNoiseLayer(nn.Module):
-    def __init__(self, mean=0.0, std=0.2):
-        super(GaussianNoiseLayer, self).__init__()
-        self.mean = mean
-        self.std = std
-
-    def forward(self, x):
-        if self.training:
-            noise = x.data.new(x.size()).normal_(self.mean, self.std)
-            if x.is_cuda:
-                noise = noise.cuda()
-            x = x + noise
-        return x
+# class GaussianNoiseLayer(nn.Module):
+#     def __init__(self, mean=0.0, std=0.2):
+#         super(GaussianNoiseLayer, self).__init__()
+#         self.mean = mean
+#         self.std = std
+#
+#     def forward(self, x):
+#         if self.training:
+#             noise = x.data.new(x.size()).normal_(self.mean, self.std)
+#             if x.is_cuda:
+#                 noise = noise.cuda()
+#             x = x + noise
+#         return x
 
 
 class cWGAN(nn.Module):
@@ -147,12 +147,14 @@ class cWGAN(nn.Module):
         self.sem_dim = params_model['sem_dim']
         # Number of classes
         self.num_clss = params_model['num_clss']
+
         # Sketch model: pre-trained on ImageNet
         self.sketch_model = VGGNetFeats(pretrained=False, finetune=False)   # 预训练要改成True吗？
         self.load_weight(self.sketch_model, params_model['path_sketch_model'], 'sketch')
         # Image model: pre-trained on ImageNet
         self.image_model = VGGNetFeats(pretrained=False, finetune=False)
         self.load_weight(self.image_model, params_model['path_image_model'], 'image')
+
         # Semantic model embedding
         self.sem = []
         for f in params_model['files_semantic_labels']:
@@ -171,9 +173,36 @@ class cWGAN(nn.Module):
         self.disc_sk = Discriminator(in_dim=self.dim_out, noise=True, use_dropout=True)
         # Image_discriminator
         self.disc_im = Discriminator(in_dim=self.dim_out, noise=True, use_dropout=True)
-        # Semantic encoder
+        # Semantic encoder(Word2Vec)
+
+        # Photo_Sketching
 
         # Optimizers
+        print('Defining optimizers...', end='')
+        self.lr = params_model['lr']
+        self.gamma = params_model['gamma']
+        self.momentum = params_model['momentum']
+        self.milestones = params_model['milestones']
+        self.optimizer_gen = optim.Adam(list(self.gen_sk.parameters()) + list(self.gen_im.parameters()), lr=self.lr)
+        self.optimizer_disc = optim.SGD(list(self.disc_sk.parameters()) + list(self.disc_im.parameters()), lr=self.lr,
+                                        momentum=self.momentum)
+        self.scheduler_gen = optim.lr_scheduler.MultiStepLR(self.optimizer_gen, milestones=self.milestones,
+                                                            gamma=self.gamma)
+        self.scheduler_disc = optim.lr_scheduler.MultiStepLR(self.optimizer_disc, milestones=self.milestones,
+                                                             gamma=self.gamma)
+        print('Done')
+
+        # loss function
+        print('Defining losses...', end='')
+        self.criterion_gan = nn.MSELoss()
+        print('Done')
+
+        # Initialize variables
+        print('Initializing variables...', end='')
+        self.sk_fe = torch.zeros(1)
+        self.im_fe = torch.zeros(1)
+        self.se_em = torch.zeros(1)
+        print('Done')
 
     def load_weight(self, model, path, type='sketch'):
         checkpoint = torch.load(os.path.join(path, 'model_best.pth'))
@@ -182,5 +211,69 @@ class cWGAN(nn.Module):
     def forward(self, sk, im, se):
         self.sk_fe = self.sketch_model(sk)
         self.im_fe = self.image_model(im)
+        # 语义嵌入
+        # self.se_em =
+        # Generate fake example with generators
+        self.fake_sk = self.gen_sk(self.se_em)
+        self.fake_im = self.gen_im(self.se_em)
+
+        # transform image to sketch with PhotoSketching
+        # self.im_sk =
+
+    def backward(self, se, cl):
+
+        # Generator loss
+        loss_gen = self.criterion_gan(self.disc_sk(self.fake_sk)) + self.criterion_gan(self.disc_im(self.fake_im))
+        # Weighted loss_gen = self.lambda_gen * loss_gen
+        # initialize optimizer for generator
+        self.optimizer_gen.zero_grad()
+        loss_gen.backward(retain_graph=True)
+        # Optimizer step
+        self.optimizer_gen.step()
+
+        # initialize optimizer for discriminator
+        self.optimizer_disc.zero_grad()
+        # Sketch discriminator loss
+        loss_disc_sk = self.criterion_gan(self.disc_sk(self.sk_fe)) + self.criterion_gan(self.disc_sk(self.fake_sk))
+        # Weighted loss_disc_sk = self.lambda_disc_sk * loss_disc_sk
+        loss_disc_sk.backward(retain_graph=True)
+
+        # Image discriminator loss
+        loss_disc_im = self.criterion_gan(self.disc_im(self.im_fe)) + self.criterion_gan(self.disc_im(self.fake_im))
+        # Weighted loss_disc_im = self.lambda_disc_im * loss_disc_im
+        loss_disc_im.backward(retain_graph=True)
+        # Optimizer step
+        self.optimizer_disc.step()
+
+        losses_disc = loss_disc_sk + loss_disc_im
+
+        loss = {'gen_loss': loss_gen, 'disc_sk': loss_disc_sk, 'disc_im': loss_disc_im, 'disc': losses_disc}
+
+        return loss
+
+    def optimize_params(self, sk, im, cl):
+        # Get numeric classes
+        num_cls = torch.from_numpy(utils.create_dict_texts(cl, self.dict_clss)).cuda()
+
+        # Get the semantic embedding for cl
+        se = np.zeros((len(cl), self.sem_dim), dtype=np.float32)
+        for i, c in enumerate(cl):
+            se_c = np.array([], dtype=np.float32)
+            for s in self.sem:
+                se_c = np.concatenate((se_c, s.get(c).astype(np.float32)), axis=0)
+            se[i] = se_c
+        se = torch.from_numpy(se)
+        if torch.cuda.is_available:
+            se = se.cuda()
+
+        # Forward pass
+        self.forward(sk, im, se)
+
+        # Backward pass
+        loss = self.backward(se, num_cls)
+
+        return loss
+
+
 
 

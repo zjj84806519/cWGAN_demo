@@ -1,3 +1,4 @@
+import argparse
 import itertools
 import os
 import glob
@@ -9,6 +10,12 @@ def create_dict_texts(texts):
     texts = sorted(list(set(texts)))
     d = {l: i for i, l in enumerate(texts)}
     return d
+
+def restricted_float(x, inter):
+    x = float(x)
+    if x < inter[0] or x > inter[1]:
+        raise argparse.ArgumentTypeError("%r not in range [1e-5, 1e-4]" % (x,))
+    return x
 
 def get_coarse_grained_samples(classes, fls_im, fls_sk, clss_im, clss_sk, set_type='train', filter_sketch=True):
     idx_im_ret = np.array([], dtype=np.int)

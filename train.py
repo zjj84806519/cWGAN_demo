@@ -13,7 +13,8 @@ from torch.utils.data.sampler import WeightedRandomSampler
 
 # user defined
 import utils
-import models
+from models import cWGAN
+from logger import Logger, AverageMeter
 from options import Options
 from data import DataGeneratorPaired, DataGeneratorSketch, DataGeneratorImage
 
@@ -27,7 +28,7 @@ def main():
     path_dataset = 'F:\\PythonWorkPlace\\cWGAN_demo'
     path_aux = 'F:\\JUN\\Academic\\Research\\Dataset\\SBIR'
 
-    # modify
+    # modify the log and checkpoint paths
     ds_var = None
     if '_' in args.dataset:
         token = args.dataset.split('_')
@@ -163,18 +164,92 @@ def main():
     params_model['files_semantic_labels'] = files_semantic_labels
     # Class dictionary
     params_model['dict_clss'] = dict_clss
+    # Optimizor
+    params_model['lr'] = args.lr
+    params_model['momentum'] = args.momentum
+    params_model['milestones'] = args.milestones
+    params_model['gamma'] = args.gamma
 
     # Model
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    netG = models.Generator().to(device)
-    netD = models.Discriminator().to(device)
+    cwgan_model = cWGAN(params_model)
 
-    # Optimizor
-    
+    # Logger
+    print('Setting logger...', end='')
+    logger = Logger(path_log, force=True)
+    print('Done')
 
-    # epoch for loop
+    # Check cuda
+    print('Checking cuda...', end='')
+    # Check if CUDA is enabled
+    if args.ngpu > 0 & torch.cuda.is_available():
+        print('*Cuda exists*...', end='')
+        cwgan_model = cwgan_model.cuda()
+    print('Done')
 
-    #
+    # Epoch for loop
+    if not args.test:
+        print('***Train***')
+        for epoch in range(args.epochs):
+
+            cwgan_model.scheduler_gen.step()
+            cwgan_model.scheduler_disc.step()
+
+        # train on training set
+        losses = train(train_loader, cwgan_model, epoch, args)
+
+        # evaluate on validation set, map_ since map is already there
+        # print('***Validation***')
+        # valid_data = validate(valid_loader_sketch, valid_loader_image, sem_pcyc_model, epoch, args)
+
+        # Logger step
+        logger.add_scalar('generator loss', losses['gen_loss'].avg)
+        logger.add_scalar('sketch discriminator loss', losses['disc_sk'].avg)
+        logger.add_scalar('image discriminator loss', losses['disc_im'].avg)
+        logger.add_scalar('discriminator loss', losses['disc'].avg)
+
+
+def train(train_loader, cwgan_model, epoch, args):
+    # Switch to train mode
+    cwgan_model.train()
+
+    batch_time = AverageMeter()
+    loss_gen = AverageMeter()
+    loss_disc_sk = AverageMeter()
+    loss_disc_im = AverageMeter()
+    losses_disc = AverageMeter()
+
+    # Start counting time
+    time_start = time.time()
+
+    for i, (sk, im, cl) in enumerate(train_loader):
+        # Transfer sk and im to cuda
+        if torch.cuda.is_available:
+            sk, im = sk.cuda(), im.cuda()
+
+        # Optimize parameters
+        loss = cwgan_model.optimize_params(sk, im, cl)
+
+        # Store losses for visualization
+        loss_gen.update(loss['gen_loss'].item(), sk.size(0))
+        loss_disc_sk.update(loss['disc_sk'].item(), sk.size(0))
+        loss_disc_im.update(loss['disc_im'].item(), sk.size(0))
+        losses_disc.update(loss['disc'].item(), sk.size(0))
+        # time
+        time_end = time.time()
+        batch_time.update(time_end - time_start)
+        time_start = time_end
+
+        if (i + 1) % args.log_interval == 0:
+            print('[Train] Epoch: [{0}][{1}/{2}]\t'
+                  'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+                  'Gen. Loss {loss_gen.val:.4f} ({loss_gen.avg:.4f})\t'
+                  'Disc. Loss {loss_disc.val:.4f} ({loss_disc.avg:.4f})\t'
+                  .format(epoch + 1, i + 1, len(train_loader), batch_time=batch_time, loss_gen=loss_gen,
+                          loss_disc=losses_disc))
+
+        losses = {'gen_loss': loss_gen, 'disc_sk': loss_disc_sk, 'disc_im': loss_disc_im, 'disc': losses_disc}
+
+    return losses
 
 
 # Press the green button in the gutter to run the script.

@@ -17,9 +17,11 @@ class Options:
                             help='Generalized zero-shot sketch based image retrieval')
         parser.add_argument('--filter-sketch', action='store_true', default=False, help='Allows only one sketch per '
                                                                                         'image (only for Sketchy)')
-        # Semantic models
+        # Pretrained models
         parser.add_argument('--semantic-models', nargs='+', default=['word2vec-google-news', 'hieremb-path'],
-                            type=str, help='Semantic model')
+                            type=str, help='Path to the semantic model')
+        parser.add_argument('--photo-sketch', default='./pretrained/photosketch.pth', type=str,
+                            help='Path to the photosketch pre-trained model')
         # Weight parameters
         parser.add_argument('--lambda', default=10.0, type=float, help='Weight on the model')
         # Size parameters
@@ -32,10 +34,15 @@ class Options:
         parser.add_argument('--epoch-size', default=100, type=int, help='Epoch size')
         parser.add_argument('--num-workers', type=int, default=4, help='Number of workers in data loader')
         # Checkpoint parameters
-
+        parser.add_argument('--test', action='store_true', default=False, help='Test only flag')
         # Optimization parameters
         parser.add_argument('--epochs', type=int, default=100, metavar='N',
                             help='Number of epochs to train (default: 100)')
+        parser.add_argument('--lr', type=lambda x: utils.restricted_float(x, [1e-5, 0.5]), default=0.0001, metavar='LR',
+                            help='Initial learning rate [1e-5, 5e-4] (default: 1e-4)')
+        parser.add_argument('--momentum', type=float, default=0.9, metavar='M', help='SGD momentum (default: 0.9)')
+        parser.add_argument('--milestones', type=int, nargs='+', default=[], help='Milestones for scheduler')
+        parser.add_argument('--gamma', type=float, default=0.1, help='LR is multiplied by gamma on schedule steps.')
         # I/O parameters
 
         self.parser = parser
