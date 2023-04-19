@@ -5,11 +5,14 @@ import glob
 import random
 
 import numpy as np
+from matplotlib import pyplot as plt
+
 
 def create_dict_texts(texts):
     texts = sorted(list(set(texts)))
     d = {l: i for i, l in enumerate(texts)}
     return d
+
 
 def restricted_float(x, inter):
     x = float(x)
@@ -17,12 +20,17 @@ def restricted_float(x, inter):
         raise argparse.ArgumentTypeError("%r not in range [1e-5, 1e-4]" % (x,))
     return x
 
-def get_coarse_grained_samples(classes, fls_im, fls_sk, clss_im, clss_sk, set_type='train', filter_sketch=True):
+
+def get_coarse_grained_samples(classes, fls_im, fls_sk, set_type='train', filter_sketch=True):
     idx_im_ret = np.array([], dtype=np.int)
     idx_sk_ret = np.array([], dtype=np.int)
-    name_sk = np.array([f.split('-')[0] for f in fls_sk])
+    clss_im = np.array([f.split('\\')[-2] for f in fls_im])
+    clss_sk = np.array([f.split('\\')[-2] for f in fls_sk])
+    names_sk = np.array([f.split('-')[0] for f in fls_sk])
+    # print('clss_im={},clss_sk={}'.format(clss_im, clss_sk))
 
     for i, c in enumerate(classes):
+        print(''.format())
         idx1 = np.where(clss_im == c)[0]
         idx2 = np.where(clss_sk == c)[0]
         if set_type == 'train':
@@ -31,12 +39,13 @@ def get_coarse_grained_samples(classes, fls_im, fls_sk, clss_im, clss_sk, set_ty
                 random.seed(i)
                 idx_cp = random.sample(idx_cp, 100000)
             idx1, idx2 = zip(*idx_cp)  # 打包成一个个元组的列表
+            print('train:第{}次的c={},idx1={},idx2={},idx_cp={}'.format(i, c, len(idx1), len(idx2), len(idx_cp)))
         else:
             # remove duplicate sketches
             if filter_sketch:
-                name_sk_tmp = name_sk[idx2]
-                idx_tmp = random.sample(idx_cp, 100000)
-                dix2 = idx2[idx_tmp]
+                names_sk_tmp = names_sk[idx2]
+                idx_tmp = np.unique(names_sk_tmp, return_index=True)[1]
+                idx2 = idx2[idx_tmp]
         idx_im_ret = np.concatenate((idx_im_ret, idx1), axis=0)
         idx_sk_ret = np.concatenate((idx_sk_ret, idx2), axis=0)
 
@@ -54,29 +63,31 @@ def load_files_tuberlin_zeroshot(root_path, photo_dir='images', sketch_dir='sket
     path_im = os.path.join(root_path, photo_dir, photo_sd)
     path_sk = os.path.join(root_path, sketch_dir, sketch_sd)
 
+    print(path_im, path_sk)
     # image files and classes
     fls_im = glob.glob(os.path.join(path_im, '*', '*.jpg'))
-    fls_im = np.array([os.path.join(f.split('/')[-2], f.split('/')[-1]) for f in fls_im])
-    clss_im = np.array([f.split('/')[-2] for f in fls_im])
+    fls_im = np.array([os.path.join(f.split('\\')[-2], f.split('\\')[-1]) for f in fls_im])
+    clss_im = np.array([f.split('\\')[-2] for f in fls_im])
 
     # sketch files and classes
-    fls_sk = glob.glob(os.path.join(path_im, '*', '*.png'))
-    fls_sk = np.array([os.path.join(f.split('/')[-2], f.split('/')[-1]) for f in fls_sk])
-    clss_sk = np.array([f.split('/')[-2] for f in fls_sk])
-
+    fls_sk = glob.glob(os.path.join(path_sk, '*', '*.png'))
+    # print('before={}'.format(len(fls_sk)))
+    fls_sk = np.array([os.path.join(f.split('\\')[-2], f.split('\\')[-1]) for f in fls_sk])
+    # print('after={}'.format(len(fls_sk)))
+    clss_sk = np.array([f.split('\\')[-2] for f in fls_sk])
+    # print('clss_sk={}'.format(len(clss_sk)))
     # all the unique classes
     classes = np.unique(clss_im)
 
-    # divide the classes to train and va
+    # divide the classes
     np.random.seed(0)
-    tr_classes = np.random.choice(classes, int(0.88 * len(classes)), replace=False)
-    va_classes = np.random.choice(np.setdiff1d(classes, tr_classes, assume_unique=True), int(0.06 * len(classes)),
-                                  replace=False)
+    tr_classes = np.random.choice(classes, int(0.8 * len(classes)), replace=False)
+    va_classes = np.random.choice(np.setdiff1d(classes, tr_classes), int(0.1 * len(classes)), replace=False)
     te_classes = np.setdiff1d(classes, np.union1d(tr_classes, va_classes))
 
-    idx_tr_im, idx_tr_sk = get_coarse_grained_samples(tr_classes, fls_im, fls_sk, clss_im, clss_sk, set_type='train')
-    idx_va_im, idx_va_sk = get_coarse_grained_samples(va_classes, fls_im, fls_sk, clss_im, clss_sk, set_type='valid')
-    idx_te_im, idx_te_sk = get_coarse_grained_samples(te_classes, fls_im, fls_sk, clss_im, clss_sk, set_type='test')
+    idx_tr_im, idx_tr_sk = get_coarse_grained_samples(tr_classes, fls_im, fls_sk, set_type='train')
+    idx_va_im, idx_va_sk = get_coarse_grained_samples(va_classes, fls_im, fls_sk, set_type='valid')
+    idx_te_im, idx_te_sk = get_coarse_grained_samples(te_classes, fls_im, fls_sk, set_type='test')
 
     splits = dict()
     # splits of sketch files and classes
@@ -97,3 +108,13 @@ def load_files_tuberlin_zeroshot(root_path, photo_dir='images', sketch_dir='sket
     splits['te_clss_im'] = clss_im[idx_te_im]
 
     return splits
+
+
+def gen_sample_plot(model, test_input):
+    prediction = np.squeeze(model(test_input).detach().cpu().numpy())
+    fig = plt.figure(figsize=(4, 4))
+    for i in range(16):
+        plt.subplot(4, 4, i+1)
+        plt.imshow((prediction[i] + 1) / 2)
+        plt.axis('off')
+    plt.show()

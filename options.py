@@ -11,14 +11,14 @@ class Options:
         # Parse options for processing
         parser = argparse.ArgumentParser(description='cWGAN demo for Zero-Shot Sketch-based Image Retrieval')
         # Optional argument
-        parser.add_argument('--dataset', required=True, default='TU-Berlin', help='Name of the dataset')
+        parser.add_argument('--dataset', default='TU-Berlin', help='Name of the dataset')
         # Different training test sets
         parser.add_argument('--gzs-sbir', action='store_true', default=False,
                             help='Generalized zero-shot sketch based image retrieval')
         parser.add_argument('--filter-sketch', action='store_true', default=False, help='Allows only one sketch per '
                                                                                         'image (only for Sketchy)')
         # Pretrained models
-        parser.add_argument('--semantic-models', nargs='+', default=['word2vec-google-news', 'hieremb-path'],
+        parser.add_argument('--semantic-models', nargs='+', default=['word2vec-google-news'],   # , 'hieremb-path'
                             type=str, help='Path to the semantic model')
         parser.add_argument('--photo-sketch', default='./pretrained/photosketch.pth', type=str,
                             help='Path to the photosketch pre-trained model')
@@ -36,7 +36,7 @@ class Options:
         # Checkpoint parameters
         parser.add_argument('--test', action='store_true', default=False, help='Test only flag')
         # Optimization parameters
-        parser.add_argument('--epochs', type=int, default=100, metavar='N',
+        parser.add_argument('--epochs', type=int, default=10, metavar='N',
                             help='Number of epochs to train (default: 100)')
         parser.add_argument('--lr', type=lambda x: utils.restricted_float(x, [1e-5, 0.5]), default=0.0001, metavar='LR',
                             help='Initial learning rate [1e-5, 5e-4] (default: 1e-4)')

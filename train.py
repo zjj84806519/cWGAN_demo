@@ -5,15 +5,13 @@ import numpy as np
 
 # pytorch, torch vision
 import torch
-import torch.optim as optim
-import torch.nn as nn
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 from torch.utils.data.sampler import WeightedRandomSampler
 
 # user defined
 import utils
-from models import cWGAN
+from models import cWGan
 from logger import Logger, AverageMeter
 from options import Options
 from data import DataGeneratorPaired, DataGeneratorSketch, DataGeneratorImage
@@ -23,17 +21,16 @@ def main():
     # Parse options
     args = Options().parse()
     print('Parameters:\t' + str(args))
-
     # Path
-    path_dataset = 'F:\\PythonWorkPlace\\cWGAN_demo'
-    path_aux = 'F:\\JUN\\Academic\\Research\\Dataset\\SBIR'
+    path_dataset = "..\\datasets"
+    path_aux = '.\\'
 
     # modify the log and checkpoint paths
-    ds_var = None
-    if '_' in args.dataset:
-        token = args.dataset.split('_')
-        args.dataset = token[0]
-        ds_var = token[1]
+    # ds_var = None
+    # if '_' in args.dataset:
+    #     token = args.dataset.split('_')
+    #     args.dataset = token[0]
+    #     ds_var = token[1]
 
     str_aux = ''
     if args.gzs_sbir:
@@ -55,6 +52,8 @@ def main():
         fi = os.path.join(path_aux, 'Semantic', args.dataset, f + '.npy')
         files_semantic_labels.append(fi)
         sem_dim += list(np.load(fi, allow_pickle=True).item().values())[0].shape[0]
+    print(sem_dim)  # debug
+
     print('Checkpoint path: {}'.format(path_cp))
     print('Logger path: {}'.format(path_log))
     print('Result path: {}'.format(path_results))
@@ -65,25 +64,25 @@ def main():
 
     # Load the dataset
     print('Loading data...', end='')
-    if args.dataset == 'Sketchy':
-        if ds_var == 'extended':
-            photo_dir = 'extended_photo'  # photo or extended_photo
-            photo_sd = ''
-        else:
-            photo_dir = 'photo'
-            photo_sd = 'tx_000000000000'
-        sketch_dir = 'sketch'
-        sketch_sd = 'tx_000000000000'
-
-    elif args.dataset == 'TU-Berlin':
-        photo_dir = 'images'
-        sketch_dir = 'sketches'
-        photo_sd = ''
-        sketch_sd = ''
-        splits = utils.load_files_tuberlin_zeroshot(root_path=root_path, photo_dir=photo_dir, sketch_dir=sketch_dir,
-                                                    photo_sd=photo_sd, sketch_sd=sketch_sd)
-    else:
-        raise Exception('Wrong dataset.')
+    # if args.dataset == 'Sketchy':
+    #     if ds_var == 'extended':
+    #         photo_dir = 'extended_photo'  # photo or extended_photo
+    #         photo_sd = ''
+    #     else:
+    #         photo_dir = 'photo'
+    #         photo_sd = 'tx_000000000000'
+    #     sketch_dir = 'sketch'
+    #     sketch_sd = 'tx_000000000000'
+    #
+    # elif args.dataset == 'TU-Berlin':
+    photo_dir = 'images'
+    sketch_dir = 'sketches'
+    photo_sd = ''
+    sketch_sd = ''
+    splits = utils.load_files_tuberlin_zeroshot(root_path=root_path, photo_dir=photo_dir, sketch_dir=sketch_dir,
+                                                photo_sd=photo_sd, sketch_sd=sketch_sd)
+    # else:
+    #     raise Exception('Wrong dataset.')
     # Combine the valid and test set into test set
     splits['te_fls_sk'] = np.concatenate((splits['va_fls_sk'], splits['te_fls_sk']), axis=0)
     splits['te_clss_sk'] = np.concatenate((splits['va_clss_sk'], splits['te_clss_sk']), axis=0)
@@ -171,7 +170,7 @@ def main():
     params_model['gamma'] = args.gamma
 
     # Model
-    cwgan_model = cWGAN(params_model)
+    cwgan_model = cWGan(params_model)
 
     # Logger
     print('Setting logger...', end='')
@@ -194,18 +193,23 @@ def main():
             cwgan_model.scheduler_gen.step()
             cwgan_model.scheduler_disc.step()
 
-        # train on training set
-        losses = train(train_loader, cwgan_model, epoch, args)
+            # train on training set
+            losses = train(train_loader, cwgan_model, epoch, args)
 
-        # evaluate on validation set, map_ since map is already there
-        # print('***Validation***')
-        # valid_data = validate(valid_loader_sketch, valid_loader_image, sem_pcyc_model, epoch, args)
+            # initialize the batch size of drawing
+            test_input = torch.randn(16, 100, device='cuda')
+            # draw generated samples
+            utils.gen_sample_plot(cwgan_model.gen_im, test_input)
 
-        # Logger step
-        logger.add_scalar('generator loss', losses['gen_loss'].avg)
-        logger.add_scalar('sketch discriminator loss', losses['disc_sk'].avg)
-        logger.add_scalar('image discriminator loss', losses['disc_im'].avg)
-        logger.add_scalar('discriminator loss', losses['disc'].avg)
+            # evaluate on validation set, map_ since map is already there
+            # print('***Validation***')
+            # valid_data = validate(valid_loader_sketch, valid_loader_image, sem_pcyc_model, epoch, args)
+
+            # Logger step
+            logger.add_scalar('generator loss', losses['gen_loss'].avg)
+            logger.add_scalar('sketch discriminator loss', losses['disc_sk'].avg)
+            logger.add_scalar('image discriminator loss', losses['disc_im'].avg)
+            logger.add_scalar('discriminator loss', losses['disc'].avg)
 
 
 def train(train_loader, cwgan_model, epoch, args):
