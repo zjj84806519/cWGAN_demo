@@ -1,7 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" remoteFilesAllowedToDisappearOnAutoupload="false">
+  <component name="PublishConfigData" autoUpload="Always" serverName="kangpeipei@10.23.10.163:22 password" remoteFilesAllowedToDisappearOnAutoupload="false">
     <serverData>
+      <paths name="cloud">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/kangpeipei/hx/cWGAN_demo" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
       <paths name="fang@10.23.10.245:22">
         <serverdata>
           <mappings>
@@ -16,10 +23,38 @@
           </mappings>
         </serverdata>
       </paths>
+      <paths name="fang@10.23.10.245:22 password (1)">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="fang@10.23.10.245:22 password (2)">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="fang@10.23.10.245:22 password (3)">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/fang/zjj/code/cWGAN_demo" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
       <paths name="kangpeipei@10.23.10.163:22">
         <serverdata>
           <mappings>
             <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="kangpeipei@10.23.10.163:22 password">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/kangpeipei/hx/cWGAN_demo" local="$PROJECT_DIR$" />
           </mappings>
         </serverdata>
       </paths>
@@ -31,5 +66,6 @@
         </serverdata>
       </paths>
     </serverData>
+    <option name="myAutoUpload" value="ALWAYS" />
   </component>
 </project>

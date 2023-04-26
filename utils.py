@@ -5,7 +5,11 @@ import glob
 import random
 
 import numpy as np
-from matplotlib import pyplot as plt
+from torchvision import transforms
+# from matplotlib import pyplot as plt
+
+loader = transforms.ToTensor()
+unloader = transforms.ToPILImage()
 
 
 def create_dict_texts(texts):
@@ -21,13 +25,27 @@ def restricted_float(x, inter):
     return x
 
 
+def tensor_to_PIL(tensor):
+    # 将Tensor转换为PIL图片
+    img = tensor.cpu().clone()
+    img = img.squeeze(0)
+    img = unloader(img)     # .convert(mode="RGB")
+    return img
+
+
+def PIL_to_tensor(img):
+    # 将PIL图片转换为Tensor
+    tensor = img.convert("RGB")
+    tensor = loader(tensor).unsqueeze(0)
+    return tensor
+
+
 def get_coarse_grained_samples(classes, fls_im, fls_sk, set_type='train', filter_sketch=True):
     idx_im_ret = np.array([], dtype=np.int)
     idx_sk_ret = np.array([], dtype=np.int)
-    clss_im = np.array([f.split('\\')[-2] for f in fls_im])
-    clss_sk = np.array([f.split('\\')[-2] for f in fls_sk])
+    clss_im = np.array([f.split('/')[-2] for f in fls_im])
+    clss_sk = np.array([f.split('/')[-2] for f in fls_sk])
     names_sk = np.array([f.split('-')[0] for f in fls_sk])
-    # print('clss_im={},clss_sk={}'.format(clss_im, clss_sk))
 
     for i, c in enumerate(classes):
         print(''.format())
@@ -39,7 +57,7 @@ def get_coarse_grained_samples(classes, fls_im, fls_sk, set_type='train', filter
                 random.seed(i)
                 idx_cp = random.sample(idx_cp, 100000)
             idx1, idx2 = zip(*idx_cp)  # 打包成一个个元组的列表
-            print('train:第{}次的c={},idx1={},idx2={},idx_cp={}'.format(i, c, len(idx1), len(idx2), len(idx_cp)))
+            # print('train:第{}次的c={},idx1={},idx2={},idx_cp={}'.format(i, c, len(idx1), len(idx2), len(idx_cp)))
         else:
             # remove duplicate sketches
             if filter_sketch:
@@ -66,16 +84,13 @@ def load_files_tuberlin_zeroshot(root_path, photo_dir='images', sketch_dir='sket
     print(path_im, path_sk)
     # image files and classes
     fls_im = glob.glob(os.path.join(path_im, '*', '*.jpg'))
-    fls_im = np.array([os.path.join(f.split('\\')[-2], f.split('\\')[-1]) for f in fls_im])
-    clss_im = np.array([f.split('\\')[-2] for f in fls_im])
+    fls_im = np.array([os.path.join(f.split('/')[-2], f.split('/')[-1]) for f in fls_im])
+    clss_im = np.array([f.split('/')[-2] for f in fls_im])
 
     # sketch files and classes
     fls_sk = glob.glob(os.path.join(path_sk, '*', '*.png'))
-    # print('before={}'.format(len(fls_sk)))
-    fls_sk = np.array([os.path.join(f.split('\\')[-2], f.split('\\')[-1]) for f in fls_sk])
-    # print('after={}'.format(len(fls_sk)))
-    clss_sk = np.array([f.split('\\')[-2] for f in fls_sk])
-    # print('clss_sk={}'.format(len(clss_sk)))
+    fls_sk = np.array([os.path.join(f.split('/')[-2], f.split('/')[-1]) for f in fls_sk])
+    clss_sk = np.array([f.split('/')[-2] for f in fls_sk])
     # all the unique classes
     classes = np.unique(clss_im)
 
@@ -110,11 +125,10 @@ def load_files_tuberlin_zeroshot(root_path, photo_dir='images', sketch_dir='sket
     return splits
 
 
-def gen_sample_plot(model, test_input):
-    prediction = np.squeeze(model(test_input).detach().cpu().numpy())
-    fig = plt.figure(figsize=(4, 4))
-    for i in range(16):
-        plt.subplot(4, 4, i+1)
-        plt.imshow((prediction[i] + 1) / 2)
-        plt.axis('off')
-    plt.show()
+# def gen_plot(img):
+#     fig = plt.figure(figsize=(4, 4))
+#     for i in range(16):
+#         plt.subplot(4, 4, i+1)
+#         plt.imshow((fig[i] + 1) / 2)
+#         plt.axis('off')
+#     plt.show()
